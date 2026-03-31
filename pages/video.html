@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Consultation vidéo — TéléMéd</title>
+<link rel="stylesheet" href="../css/main.css">
+<style>
+  body { background:#000; overflow:hidden; }
+  .video-wrap {
+    height: 100vh;
+    display: grid;
+    grid-template-rows: 1fr auto;
+    gap: 0;
+  }
+  .videos-area {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    padding: 16px;
+    height: calc(100vh - 100px);
+  }
+  .video-box {
+    background: #111;
+    border-radius: 16px;
+    overflow: hidden;
+    position: relative;
+  }
+  video { width: 100%; height: 100%; object-fit: cover; }
+  .video-label {
+    position: absolute;
+    bottom: 14px; left: 14px;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(4px);
+    padding: 5px 14px;
+    border-radius: 20px;
+    font-size: 0.82rem;
+    font-weight: 600;
+  }
+  .status-badge {
+    position: absolute;
+    top: 14px; right: 14px;
+    background: rgba(0,212,170,0.2);
+    border: 1px solid rgba(0,212,170,0.4);
+    color: var(--accent2);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: .75rem;
+    font-weight: 600;
+  }
+  .controls-bar {
+    height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    background: rgba(10,12,20,0.95);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid rgba(255,255,255,0.08);
+  }
+  .ctrl-btn {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    font-size: 1.4rem;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+    position: relative;
+  }
+  .ctrl-btn:hover { transform: scale(1.1); }
+  .ctrl-mute   { background: rgba(255,255,255,0.1); }
+  .ctrl-cam    { background: rgba(255,255,255,0.1); }
+  .ctrl-end    { background: #ff4f6d; width: 64px; height: 64px; font-size: 1.6rem; }
+  .ctrl-chat   { background: rgba(59,158,255,0.2); }
+  .ctrl-off    { background: rgba(255,79,109,0.2); }
+  .ctrl-label  {
+    position: absolute;
+    bottom: -20px;
+    left: 50%; transform: translateX(-50%);
+    font-size: .65rem;
+    color: var(--text3);
+    white-space: nowrap;
+    font-family: var(--font);
+  }
+  .timer {
+    font-family: var(--mono);
+    font-size: 1rem;
+    color: var(--text2);
+    min-width: 70px;
+    text-align: center;
+  }
+  #waiting {
+    position: absolute; inset: 0;
+    background: rgba(6,8,15,0.92);
+    backdrop-filter: blur(10px);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 16px; z-index: 10;
+    border-radius: 16px;
+  }
+  .connecting-dots span {
+    display: inline-block;
+    width: 8px; height: 8px;
+    background: var(--accent);
+    border-radius: 50%;
+    margin: 0 3px;
+    animation: dot 1.4s infinite;
+  }
+  .connecting-dots span:nth-child(2) { animation-delay: .2s; }
+  .connecting-dots span:nth-child(3) { animation-delay: .4s; }
+  @keyframes dot { 0%,80%,100%{transform:scale(0.6);opacity:.4} 40%{transform:scale(1);opacity:1} }
+</style>
+</head>
+<body>
+<div class="video-wrap">
+  <div class="videos-area">
+    <!-- Remote -->
+    <div class="video-box">
+      <video id="remoteVideo" autoplay playsinline></video>
+      <div class="video-label" id="remoteLabel">Médecin</div>
+      <div class="status-badge" id="connStatus">● Connexion…</div>
+      <div id="waiting">
+        <div style="font-size:3rem">📹</div>
+        <div style="font-weight:700;font-size:1.1rem">En attente de connexion…</div>
+        <div class="connecting-dots"><span></span><span></span><span></span></div>
+        <div style="font-size:.82rem;color:var(--text3)">Partage le lien de la salle avec l'autre participant</div>
+        <div style="background:var(--surface);border-radius:8px;padding:10px 20px;font-family:var(--mono);font-size:.85rem;color:var(--accent)" id="roomDisplay"></div>
+      </div>
+    </div>
+    <!-- Local -->
+    <div class="video-box" style="max-height:280px;max-width:380px;position:absolute;bottom:116px;right:28px;z-index:5">
+      <video id="localVideo" autoplay muted playsinline></video>
+      <div class="video-label">Vous</div>
+    </div>
+  </div>
+
+  <div class="controls-bar">
+    <div style="position:relative">
+      <button class="ctrl-btn ctrl-mute" id="muteBtn" title="Micro">🎤</button>
+      <span class="ctrl-label">Micro</span>
+    </div>
+    <div style="position:relative">
+      <button class="ctrl-btn ctrl-cam" id="camBtn" title="Caméra">📷</button>
+      <span class="ctrl-label">Caméra</span>
+    </div>
+    <div class="timer" id="callTimer">00:00</div>
+    <div style="position:relative">
+      <button class="ctrl-btn ctrl-end" id="endBtn" title="Raccrocher">📵</button>
+      <span class="ctrl-label">Raccrocher</span>
+    </div>
+    <div style="position:relative">
+      <button class="ctrl-btn ctrl-chat" id="chatBtn" title="Chat">💬</button>
+      <span class="ctrl-label">Message</span>
+    </div>
+    <div style="position:relative">
+      <button class="ctrl-btn ctrl-cam" id="shareBtn" title="Partager écran">🖥️</button>
+      <span class="ctrl-label">Écran</span>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script type="module">
+import { requireAuth } from '../js/auth.js';
+import { rtdb, CONFIG } from '../js/firebase.js';
+import {
+  ref, set, get, onValue, push, remove
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { toast } from '../js/utils.js';
+
+const { user, profile } = await requireAuth('../pages/login.html');
+
+const params = new URLSearchParams(location.search);
+const roomId = params.get('room') || `room_${Date.now()}`;
+document.getElementById('roomDisplay').textContent = `Salle: ${roomId}`;
+
+// ── WebRTC Setup ────────────────────────────────────────────────
+const iceConfig = {
+  iceServers: [
+    { urls: CONFIG.webrtc.stunServer || 'stun:stun.l.google.com:19302' },
+    ...(CONFIG.webrtc.turnServer ? [{
+      urls: CONFIG.webrtc.turnServer,
+      username: CONFIG.webrtc.turnUsername,
+      credential: CONFIG.webrtc.turnCredential
+    }] : [])
+  ]
+};
+
+let pc, localStream, timerInterval, seconds = 0;
+
+async function init() {
+  localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+  document.getElementById('localVideo').srcObject = localStream;
+
+  pc = new RTCPeerConnection(iceConfig);
+  localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+  pc.ontrack = (e) => {
+    document.getElementById('remoteVideo').srcObject = e.streams[0];
+    document.getElementById('waiting').style.display = 'none';
+    document.getElementById('connStatus').textContent = '● Connecté';
+    document.getElementById('connStatus').style.color = 'var(--accent2)';
+    startTimer();
+  };
+
+  pc.onicecandidate = async (e) => {
+    if (e.candidate) {
+      await push(ref(rtdb, `rooms/${roomId}/candidates/${user.uid}`), e.candidate.toJSON());
+    }
+  };
+
+  // Signalisation Firebase Realtime DB
+  const roomRef = ref(rtdb, `rooms/${roomId}`);
+  const snap = await get(roomRef);
+
+  if (!snap.exists() || !snap.val().offer) {
+    // Caller: créer l'offre
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    await set(ref(rtdb, `rooms/${roomId}/offer`), { sdp: offer.sdp, type: offer.type });
+    // Attendre réponse
+    onValue(ref(rtdb, `rooms/${roomId}/answer`), async (s) => {
+      if (s.exists() && !pc.currentRemoteDescription) {
+        await pc.setRemoteDescription(new RTCSessionDescription(s.val()));
+      }
+    });
+  } else {
+    // Callee: répondre
+    const offer = snap.val().offer;
+    await pc.setRemoteDescription(new RTCSessionDescription(offer));
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    await set(ref(rtdb, `rooms/${roomId}/answer`), { sdp: answer.sdp, type: answer.type });
+  }
+
+  // Écouter ICE candidates de l'autre
+  onValue(ref(rtdb, `rooms/${roomId}/candidates`), (s) => {
+    if (!s.exists()) return;
+    s.forEach(userSnap => {
+      if (userSnap.key === user.uid) return;
+      userSnap.forEach(candSnap => {
+        const cand = candSnap.val();
+        pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+      });
+    });
+  });
+}
+
+function startTimer() {
+  clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    seconds++;
+    const m = String(Math.floor(seconds/60)).padStart(2,'0');
+    const s = String(seconds%60).padStart(2,'0');
+    document.getElementById('callTimer').textContent = `${m}:${s}`;
+  }, 1000);
+}
+
+// Controls
+let muted = false, camOff = false;
+document.getElementById('muteBtn').addEventListener('click', () => {
+  muted = !muted;
+  localStream.getAudioTracks().forEach(t => t.enabled = !muted);
+  document.getElementById('muteBtn').textContent = muted ? '🔇' : '🎤';
+  document.getElementById('muteBtn').style.background = muted ? 'rgba(255,79,109,0.3)' : 'rgba(255,255,255,0.1)';
+});
+
+document.getElementById('camBtn').addEventListener('click', () => {
+  camOff = !camOff;
+  localStream.getVideoTracks().forEach(t => t.enabled = !camOff);
+  document.getElementById('camBtn').textContent = camOff ? '🚫' : '📷';
+});
+
+document.getElementById('endBtn').addEventListener('click', async () => {
+  if (confirm('Terminer l\'appel ?')) {
+    clearInterval(timerInterval);
+    pc?.close();
+    localStream?.getTracks().forEach(t => t.stop());
+    await remove(ref(rtdb, `rooms/${roomId}`));
+    history.back();
+  }
+});
+
+document.getElementById('chatBtn').addEventListener('click', () => {
+  window.open(`chat.html`, '_blank');
+});
+
+document.getElementById('shareBtn').addEventListener('click', async () => {
+  try {
+    const screen = await navigator.mediaDevices.getDisplayMedia({ video: true });
+    const screenTrack = screen.getVideoTracks()[0];
+    const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+    if (sender) sender.replaceTrack(screenTrack);
+    screenTrack.onended = () => {
+      const camTrack = localStream.getVideoTracks()[0];
+      if (sender) sender.replaceTrack(camTrack);
+    };
+    toast('Partage d\'écran démarré', 'info');
+  } catch (e) { toast('Annulé', 'warn'); }
+});
+
+init().catch(e => {
+  console.error(e);
+  toast('Erreur d\'accès caméra/micro : ' + e.message, 'error');
+});
+</script>
+</body>
+</html>

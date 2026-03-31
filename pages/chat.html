@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Messages — TéléMéd</title>
+<link rel="stylesheet" href="../css/main.css">
+</head>
+<body>
+<div id="app-loader" class="loading-full"><div class="spinner"></div></div>
+
+<div class="app-layout" id="appLayout" style="display:none">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo"><div class="logo-mark">🏥</div><span>TéléMéd<small>Messages</small></span></div>
+    <nav class="sidebar-nav">
+      <a class="nav-item" href="dashboard.html"><span class="nav-icon">🏠</span>Accueil</a>
+      <a class="nav-item" href="medecins.html"><span class="nav-icon">👨‍⚕️</span>Médecins</a>
+      <a class="nav-item" href="rdv.html"><span class="nav-icon">📅</span>Mes RDV</a>
+      <a class="nav-item active" href="chat.html"><span class="nav-icon">💬</span>Messages</a>
+      <a class="nav-item" href="dossier.html"><span class="nav-icon">🗂️</span>Dossier médical</a>
+      <a class="nav-item" href="paiements.html"><span class="nav-icon">💳</span>Paiements</a>
+      <button class="nav-item" id="logoutBtn"><span class="nav-icon">🚪</span>Déconnexion</button>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-card"><div class="avatar" id="avatarEl">?</div><div class="user-info"><div class="user-name" id="userName">…</div></div></div>
+    </div>
+  </aside>
+
+  <div class="main-content">
+    <div class="topbar">
+      <button class="menu-toggle" id="menuToggle">☰</button>
+      <span class="topbar-title">Messages</span>
+    </div>
+    <div class="page-content">
+      <div class="chat-layout">
+        <!-- Conversations list -->
+        <div class="chat-sidebar">
+          <div style="padding:16px;border-bottom:1px solid var(--border)">
+            <input type="text" class="form-control" id="convSearch" placeholder="🔍 Rechercher…">
+          </div>
+          <div id="convList" style="padding:8px">
+            <div class="spinner" style="margin:24px auto"></div>
+          </div>
+        </div>
+
+        <!-- Chat area -->
+        <div class="chat-main" id="chatMain">
+          <div style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;color:var(--text3)">
+            <div style="font-size:3rem">💬</div>
+            <p>Sélectionnez une conversation</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script type="module">
+import { requireAuth, logout, getInitials } from '../js/auth.js';
+import { rtdb, db } from '../js/firebase.js';
+import {
+  ref, push, onValue, serverTimestamp as rtServerTimestamp, off
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import {
+  collection, query, where, getDocs
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { toast, fmtTime, initMobileMenu } from '../js/utils.js';
+
+const { user, profile } = await requireAuth();
+document.getElementById('app-loader').remove();
+document.getElementById('appLayout').style.display = 'flex';
+
+document.getElementById('userName').textContent = profile?.name || user.displayName;
+document.getElementById('avatarEl').textContent = getInitials(profile?.name || user.displayName);
+document.getElementById('logoutBtn').addEventListener('click', logout);
+initMobileMenu();
+
+let currentListener = null;
+let currentRoomId = null;
+
+// Charger les conversations (basées sur les RDV)
+async function loadConversations() {
+  const field = profile?.role === 'medecin' ? 'medecinId' : 'patientId';
+  const q = query(collection(db, 'rdv'), where(field, '==', user.uid));
+  const snap = await getDocs(q);
+
+  const seen = new Set();
+  const convs = [];
+  snap.forEach(d => {
+    const r = d.data();
+    const otherId = profile?.role === 'medecin' ? r.patientId : r.medecinId;
+    const otherName = profile?.role === 'medecin' ? r.patientNom : `Dr. ${r.medecinNom}`;
+    if (!seen.has(otherId)) {
+      seen.add(otherId);
+      convs.push({ otherId, otherName, rdvId: d.id, specialite: r.specialite });
+    }
+  });
+
+  const el = document.getElementById('convList');
+  if (!convs.length) {
+    el.innerHTML = `<p style="color:var(--text3);text-align:center;padding:20px;font-size:.85rem">Aucune conversation</p>`;
+    return;
+  }
+  el.innerHTML = convs.map(c => `
+    <div class="conv-item" data-id="${c.otherId}" data-name="${c.otherName}"
+      style="display:flex;align-items:center;gap:10px;padding:12px;border-radius:8px;cursor:pointer;transition:background .2s"
+      onmouseover="this.style.background='var(--surface)'" onmouseout="this.style.background=''"
+      onclick="window.openConv('${c.otherId}','${c.otherName}')">
+      <div class="avatar" style="width:38px;height:38px">${getInitials(c.otherName)}</div>
+      <div>
+        <div style="font-weight:600;font-size:.9rem">${c.otherName}</div>
+        <div style="font-size:.75rem;color:var(--text3)">${c.specialite || ''}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+window.openConv = function(otherId, otherName) {
+  // Room ID = uid combinés triés
+  currentRoomId = [user.uid, otherId].sort().join('_');
+  const chatMain = document.getElementById('chatMain');
+
+  chatMain.innerHTML = `
+    <div class="chat-header">
+      <div class="avatar" style="width:38px;height:38px">${getInitials(otherName)}</div>
+      <div>
+        <div style="font-weight:700">${otherName}</div>
+        <div style="font-size:.75rem;color:var(--accent2)">● En ligne</div>
+      </div>
+      <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="location.href='video.html?room=${currentRoomId}'">📹 Appel vidéo</button>
+    </div>
+    <div class="chat-messages" id="msgArea"></div>
+    <div class="chat-input-area">
+      <textarea class="form-control" id="msgInput" placeholder="Écrire un message…" rows="1"></textarea>
+      <button class="btn btn-primary" id="sendBtn">Envoyer</button>
+    </div>
+  `;
+
+  // Écoute temps réel
+  if (currentListener) off(currentListener);
+  const msgRef = ref(rtdb, `chats/${currentRoomId}`);
+  currentListener = msgRef;
+
+  onValue(msgRef, (snap) => {
+    const area = document.getElementById('msgArea');
+    if (!area) return;
+    const msgs = [];
+    snap.forEach(child => msgs.push({ id: child.key, ...child.val() }));
+    area.innerHTML = msgs.map(m => `
+      <div class="msg ${m.senderId === user.uid ? 'mine' : ''}">
+        <div>
+          <div class="msg-bubble">${m.text}</div>
+          <div class="msg-time">${m.time || ''}</div>
+        </div>
+      </div>
+    `).join('');
+    area.scrollTop = area.scrollHeight;
+  });
+
+  // Envoyer
+  document.getElementById('sendBtn').addEventListener('click', sendMsg);
+  document.getElementById('msgInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
+  });
+};
+
+async function sendMsg() {
+  const input = document.getElementById('msgInput');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  const msgRef = ref(rtdb, `chats/${currentRoomId}`);
+  await push(msgRef, {
+    senderId: user.uid,
+    senderName: profile?.name || user.displayName,
+    text,
+    time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+    ts: Date.now()
+  });
+}
+
+loadConversations();
+
+// URL param
+const params = new URLSearchParams(location.search);
+if (params.get('with') && params.get('name')) {
+  setTimeout(() => window.openConv(params.get('with'), params.get('name')), 500);
+}
+</script>
+</body>
+</html>

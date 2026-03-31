@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TéléMéd — Consultation médicale en ligne</title>
+<link rel="stylesheet" href="css/main.css">
+<style>
+  .hero {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 40px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: fixed;
+    width: 800px; height: 800px;
+    background: radial-gradient(circle, rgba(59,158,255,0.07) 0%, transparent 70%);
+    top: -300px; left: 50%; transform: translateX(-50%);
+    pointer-events: none;
+  }
+  .hero::after {
+    content: '';
+    position: fixed;
+    width: 500px; height: 500px;
+    background: radial-gradient(circle, rgba(0,212,170,0.06) 0%, transparent 70%);
+    bottom: -200px; right: -100px;
+    pointer-events: none;
+  }
+  .hero-content { max-width: 700px; position: relative; z-index: 1; }
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(59,158,255,0.1);
+    border: 1px solid rgba(59,158,255,0.25);
+    color: var(--accent);
+    padding: 5px 16px;
+    border-radius: 20px;
+    font-size: .82rem;
+    font-weight: 600;
+    margin-bottom: 24px;
+  }
+  h1 {
+    font-size: clamp(2.2rem, 6vw, 3.8rem);
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    margin-bottom: 20px;
+  }
+  h1 span { 
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .hero-sub {
+    font-size: 1.1rem;
+    color: var(--text2);
+    max-width: 500px;
+    margin: 0 auto 36px;
+    line-height: 1.7;
+  }
+  .cta-group { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .features {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    max-width: 900px;
+    margin: 60px auto 0;
+  }
+  .feat-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    text-align: left;
+    transition: border-color var(--transition), transform var(--transition);
+  }
+  .feat-card:hover { border-color: var(--accent); transform: translateY(-3px); }
+  .feat-icon { font-size: 2rem; margin-bottom: 12px; }
+  .feat-title { font-weight: 700; margin-bottom: 6px; }
+  .feat-desc { font-size: .85rem; color: var(--text2); line-height: 1.6; }
+
+  nav.topnav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    padding: 16px 40px;
+    background: rgba(6,8,15,0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-brand { display:flex;align-items:center;gap:10px;font-weight:700;font-size:1.05rem; text-decoration:none;color:var(--text); }
+  .nav-brand .mark { width:32px;height:32px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px; }
+  .nav-links { margin-left:auto;display:flex;gap:12px; }
+</style>
+</head>
+<body>
+<nav class="topnav">
+  <a class="nav-brand" href="#">
+    <div class="mark">🏥</div>
+    TéléMéd
+  </a>
+  <div class="nav-links">
+    <a href="pages/login.html" class="btn btn-ghost btn-sm">Connexion</a>
+    <a href="pages/register.html" class="btn btn-primary btn-sm">Commencer →</a>
+  </div>
+</nav>
+
+<div class="hero">
+  <div class="hero-content">
+    <div class="hero-badge fade-up">🌍 Plateforme médicale · Cameroun</div>
+    <h1 class="fade-up delay-1">Votre médecin,<br><span>où que vous soyez</span></h1>
+    <p class="hero-sub fade-up delay-2">Consultez les meilleurs médecins en ligne par chat, audio ou vidéo. Gérez vos rendez-vous, votre dossier médical et payez avec Mobile Money.</p>
+    <div class="cta-group fade-up delay-3">
+      <a href="pages/register.html" class="btn btn-primary" style="padding:14px 32px;font-size:1rem">
+        Créer un compte gratuit
+      </a>
+      <a href="pages/login.html" class="btn btn-ghost" style="padding:14px 32px;font-size:1rem">
+        Se connecter
+      </a>
+    </div>
+
+    <div class="features">
+      <div class="feat-card fade-up delay-1">
+        <div class="feat-icon">📹</div>
+        <div class="feat-title">Consultation vidéo</div>
+        <div class="feat-desc">Appel vidéo HD avec votre médecin via WebRTC. Sécurisé et instantané.</div>
+      </div>
+      <div class="feat-card fade-up delay-2">
+        <div class="feat-icon">💬</div>
+        <div class="feat-title">Chat temps réel</div>
+        <div class="feat-desc">Messagerie instantanée chiffrée avec vos médecins, disponible 24h/24.</div>
+      </div>
+      <div class="feat-card fade-up delay-3">
+        <div class="feat-icon">🗂️</div>
+        <div class="feat-title">Dossier médical</div>
+        <div class="feat-desc">Historique complet, ordonnances et documents stockés en toute sécurité.</div>
+      </div>
+      <div class="feat-card fade-up delay-1">
+        <div class="feat-icon">📱</div>
+        <div class="feat-title">Mobile Money</div>
+        <div class="feat-desc">Paiez facilement avec Orange Money, MTN MoMo ou carte bancaire.</div>
+      </div>
+    </div>
+
+    <div style="margin-top:60px;padding-top:40px;border-top:1px solid var(--border)">
+      <p style="color:var(--text3);font-size:.82rem">
+        🔒 Données médicales sécurisées · Firebase · RGPD
+      </p>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { onAuth } from './js/auth.js';
+// Si déjà connecté → rediriger
+onAuth(user => {
+  if (user) window.location.href = 'pages/dashboard.html';
+});
+</script>
+</body>
+</html>

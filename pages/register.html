@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inscription — TéléMéd</title>
+<link rel="stylesheet" href="../css/main.css">
+<style>
+  .role-select { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 24px; }
+  .role-card {
+    border: 2px solid var(--border); border-radius: var(--radius);
+    padding: 16px; text-align: center; cursor: pointer;
+    transition: all var(--transition); background: none;
+    font-family: var(--font);
+  }
+  .role-card .icon { font-size: 2rem; margin-bottom: 8px; }
+  .role-card .label { font-size: 0.85rem; font-weight: 600; color: var(--text2); }
+  .role-card.active { border-color: var(--accent); background: rgba(59,158,255,0.08); }
+  .role-card.active .label { color: var(--accent); }
+  .doc-fields { display: none; }
+  .doc-fields.show { display: block; }
+  .link { color: var(--accent); text-decoration: none; font-size: 0.88rem; }
+</style>
+</head>
+<body>
+<div class="auth-bg">
+  <div class="auth-card fade-up" style="max-width:480px">
+    <div class="auth-logo">
+      <div class="mark">🏥</div>
+      <h1>Créer un compte</h1>
+      <p>Choisissez votre profil</p>
+    </div>
+
+    <div class="role-select">
+      <button class="role-card active" data-role="patient">
+        <div class="icon">👤</div>
+        <div class="label">Patient</div>
+      </button>
+      <button class="role-card" data-role="medecin">
+        <div class="icon">👨‍⚕️</div>
+        <div class="label">Médecin</div>
+      </button>
+    </div>
+
+    <form id="registerForm">
+      <div class="form-group">
+        <label class="form-label">Nom complet</label>
+        <input type="text" id="name" class="form-control" placeholder="Dr. Jean Dupont" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input type="email" id="email" class="form-control" placeholder="votre@email.com" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Mot de passe</label>
+        <input type="password" id="password" class="form-control" placeholder="8 caractères minimum" required minlength="8">
+      </div>
+
+      <!-- Champs médecin -->
+      <div class="doc-fields" id="docFields">
+        <div class="form-group">
+          <label class="form-label">Spécialité</label>
+          <select id="specialite" class="form-control">
+            <option value="">Choisir…</option>
+            <option>Médecine générale</option>
+            <option>Cardiologie</option>
+            <option>Pédiatrie</option>
+            <option>Dermatologie</option>
+            <option>Gynécologie</option>
+            <option>Neurologie</option>
+            <option>Ophtalmologie</option>
+            <option>Psychiatrie</option>
+            <option>Autre</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">N° Ordre des Médecins</label>
+          <input type="text" id="ordreNum" class="form-control" placeholder="CM-XXXXX">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tarif consultation (FCFA)</label>
+          <input type="number" id="tarif" class="form-control" placeholder="5000" min="0">
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-full" id="regBtn">
+        Créer mon compte
+      </button>
+    </form>
+
+    <p style="text-align:center;margin-top:20px;font-size:.88rem;color:var(--text2)">
+      Déjà un compte ? <a href="login.html" class="link">Se connecter</a>
+    </p>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script type="module">
+import { register, redirectIfLoggedIn } from '../js/auth.js';
+import { toast } from '../js/utils.js';
+
+redirectIfLoggedIn();
+
+let selectedRole = 'patient';
+document.querySelectorAll('.role-card').forEach(card => {
+  card.addEventListener('click', () => {
+    document.querySelectorAll('.role-card').forEach(c => c.classList.remove('active'));
+    card.classList.add('active');
+    selectedRole = card.dataset.role;
+    document.getElementById('docFields').classList.toggle('show', selectedRole === 'medecin');
+  });
+});
+
+document.getElementById('registerForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('regBtn');
+  btn.disabled = true;
+  btn.textContent = 'Création…';
+
+  const extra = {};
+  if (selectedRole === 'medecin') {
+    extra.specialite = document.getElementById('specialite').value;
+    extra.ordreNum   = document.getElementById('ordreNum').value;
+    extra.tarif      = Number(document.getElementById('tarif').value) || 5000;
+    extra.verified   = false;
+    extra.rating     = 0;
+    extra.consultations = 0;
+  }
+
+  try {
+    await register({
+      email:    document.getElementById('email').value,
+      password: document.getElementById('password').value,
+      name:     document.getElementById('name').value,
+      role:     selectedRole,
+      extra
+    });
+    toast('Compte créé avec succès !', 'success');
+    setTimeout(() => {
+      window.location.href = selectedRole === 'medecin' ? 'medecin-dashboard.html' : 'dashboard.html';
+    }, 1000);
+  } catch (err) {
+    toast(err.message.replace('Firebase: ', ''), 'error');
+    btn.disabled = false;
+    btn.textContent = 'Créer mon compte';
+  }
+});
+</script>
+</body>
+</html>

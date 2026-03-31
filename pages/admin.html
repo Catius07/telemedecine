@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Administration — TéléMéd</title>
+<link rel="stylesheet" href="../css/main.css">
+</head>
+<body>
+<div id="app-loader" class="loading-full"><div class="spinner"></div></div>
+
+<div class="app-layout" id="appLayout" style="display:none">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo"><div class="logo-mark">⚙️</div><span>TéléMéd<small>Admin</small></span></div>
+    <nav class="sidebar-nav">
+      <a class="nav-item active" href="admin.html"><span class="nav-icon">📊</span>Dashboard</a>
+      <a class="nav-item" href="#users" onclick="showSection('users')"><span class="nav-icon">👥</span>Utilisateurs</a>
+      <a class="nav-item" href="#medecins" onclick="showSection('medecins')"><span class="nav-icon">👨‍⚕️</span>Médecins</a>
+      <a class="nav-item" href="#rdv" onclick="showSection('rdv')"><span class="nav-icon">📅</span>RDV</a>
+      <a class="nav-item" href="#paiements" onclick="showSection('paiements')"><span class="nav-icon">💰</span>Paiements</a>
+      <button class="nav-item" id="logoutBtn"><span class="nav-icon">🚪</span>Déconnexion</button>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-card"><div class="avatar" style="background:linear-gradient(135deg,#f6ad55,#e53e3e)">AD</div><div class="user-info"><div class="user-name">Administrateur</div><div class="user-role">Admin</div></div></div>
+    </div>
+  </aside>
+
+  <div class="main-content">
+    <div class="topbar">
+      <button class="menu-toggle" id="menuToggle">☰</button>
+      <span class="topbar-title" id="sectionTitle">Vue d'ensemble</span>
+    </div>
+    <div class="page-content">
+      <!-- Stats globales -->
+      <div class="stat-grid fade-up" id="globalStats">
+        <div class="stat-card"><div class="stat-icon">👥</div><div class="stat-label">Patients</div><div class="stat-value" id="g-patients">—</div></div>
+        <div class="stat-card"><div class="stat-icon">👨‍⚕️</div><div class="stat-label">Médecins</div><div class="stat-value" id="g-medecins">—</div></div>
+        <div class="stat-card"><div class="stat-icon">📅</div><div class="stat-label">RDV total</div><div class="stat-value" id="g-rdv">—</div></div>
+        <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-label">Revenus</div><div class="stat-value" id="g-rev">—</div></div>
+      </div>
+
+      <!-- Section users -->
+      <div id="section-users" style="display:none">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+            <h2 style="font-size:1rem;font-weight:700">Tous les utilisateurs</h2>
+            <input type="text" class="form-control" id="userSearch" placeholder="🔍 Rechercher…" style="width:220px">
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Nom</th><th>Email</th><th>Rôle</th><th>Inscription</th><th>Actions</th></tr></thead>
+              <tbody id="usersTable"><tr><td colspan="5" style="text-align:center;padding:32px"><div class="spinner" style="margin:auto"></div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section médecins (vérification) -->
+      <div id="section-medecins" style="display:none">
+        <div class="card">
+          <h2 style="font-size:1rem;font-weight:700;margin-bottom:16px">Médecins — Vérification des comptes</h2>
+          <div id="medTable"><div class="spinner" style="margin:auto"></div></div>
+        </div>
+      </div>
+
+      <!-- Section RDV -->
+      <div id="section-rdv" style="display:none">
+        <div class="card">
+          <h2 style="font-size:1rem;font-weight:700;margin-bottom:16px">Tous les rendez-vous</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Date</th><th>Patient</th><th>Médecin</th><th>Statut</th><th>Tarif</th></tr></thead>
+              <tbody id="rdvTable"><tr><td colspan="5" style="text-align:center;padding:32px"><div class="spinner" style="margin:auto"></div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section paiements -->
+      <div id="section-paiements" style="display:none">
+        <div class="card">
+          <h2 style="font-size:1rem;font-weight:700;margin-bottom:16px">Transactions</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Date</th><th>Patient</th><th>Médecin</th><th>Montant</th><th>Méthode</th><th>Statut</th></tr></thead>
+              <tbody id="payTable"><tr><td colspan="6" style="text-align:center;padding:32px"><div class="spinner" style="margin:auto"></div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script type="module">
+import { requireAuth, logout } from '../js/auth.js';
+import { db } from '../js/firebase.js';
+import {
+  collection, getDocs, doc, updateDoc, deleteDoc, orderBy, query
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { toast, fmtDate, fmtCFA, initMobileMenu } from '../js/utils.js';
+
+const { user, profile } = await requireAuth();
+if (profile?.role !== 'admin') {
+  toast('Accès refusé', 'error');
+  window.location.href = 'dashboard.html';
+}
+document.getElementById('app-loader').remove();
+document.getElementById('appLayout').style.display = 'flex';
+document.getElementById('logoutBtn').addEventListener('click', logout);
+initMobileMenu();
+
+window.showSection = function(name) {
+  ['users','medecins','rdv','paiements'].forEach(s => {
+    document.getElementById(`section-${s}`).style.display = s === name ? 'block' : 'none';
+  });
+  document.getElementById('sectionTitle').textContent = {
+    users:'Utilisateurs', medecins:'Médecins', rdv:'Rendez-vous', paiements:'Paiements'
+  }[name];
+  if (name === 'users')      loadUsers();
+  if (name === 'medecins')   loadMedecins();
+  if (name === 'rdv')        loadRdv();
+  if (name === 'paiements')  loadPaiements();
+};
+
+// Stats globales
+async function loadGlobal() {
+  const [pSnap, mSnap, rSnap, paySnap] = await Promise.all([
+    getDocs(query(collection(db, 'users'))),
+    getDocs(query(collection(db, 'rdv'))),
+    getDocs(query(collection(db, 'paiements'))),
+    getDocs(query(collection(db, 'users')))
+  ]);
+  const users = pSnap.docs.map(d => d.data());
+  document.getElementById('g-patients').textContent  = users.filter(u => u.role === 'patient').length;
+  document.getElementById('g-medecins').textContent  = users.filter(u => u.role === 'medecin').length;
+  document.getElementById('g-rdv').textContent       = mSnap.size;
+  let total = 0; rSnap.forEach(d => total += d.data().montant || 0);
+  document.getElementById('g-rev').textContent       = fmtCFA(total);
+}
+
+// Utilisateurs
+let allUsers = [];
+async function loadUsers() {
+  const snap = await getDocs(collection(db, 'users'));
+  allUsers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  renderUsers(allUsers);
+}
+function renderUsers(users) {
+  document.getElementById('usersTable').innerHTML = users.map(u => `
+    <tr>
+      <td style="font-weight:600">${u.name || '—'}</td>
+      <td style="color:var(--text2)">${u.email}</td>
+      <td><span class="badge ${u.role==='medecin'?'badge-blue':u.role==='admin'?'badge-red':'badge-green'}">${u.role}</span></td>
+      <td>${fmtDate(u.createdAt)}</td>
+      <td>
+        <button class="btn btn-ghost btn-sm" onclick="deleteUser('${u.id}')" style="color:var(--danger)">Supprimer</button>
+      </td>
+    </tr>`).join('');
+}
+document.getElementById('userSearch')?.addEventListener('input', e => {
+  const s = e.target.value.toLowerCase();
+  renderUsers(allUsers.filter(u => u.name?.toLowerCase().includes(s) || u.email?.includes(s)));
+});
+window.deleteUser = async function(id) {
+  if (!confirm('Supprimer cet utilisateur ?')) return;
+  await deleteDoc(doc(db, 'users', id));
+  toast('Utilisateur supprimé', 'success');
+  loadUsers();
+};
+
+// Médecins vérification
+async function loadMedecins() {
+  const snap = await getDocs(collection(db, 'users'));
+  const medecins = snap.docs.filter(d => d.data().role === 'medecin').map(d => ({ id: d.id, ...d.data() }));
+  document.getElementById('medTable').innerHTML = medecins.map(m => `
+    <div style="display:flex;gap:16px;align-items:center;padding:14px;background:var(--bg3);border-radius:8px;margin-bottom:10px">
+      <div class="avatar" style="width:44px;height:44px">👨‍⚕️</div>
+      <div style="flex:1">
+        <div style="font-weight:700">Dr. ${m.name}</div>
+        <div style="font-size:.82rem;color:var(--text2)">${m.specialite || '—'} · N° ${m.ordreNum || 'N/A'}</div>
+        <div style="font-size:.78rem;color:var(--text3)">${m.email}</div>
+      </div>
+      <div>
+        <span class="badge ${m.verified ? 'badge-green' : 'badge-yellow'}">${m.verified ? '✔ Vérifié' : '⏳ En attente'}</span>
+        ${!m.verified ? `<button class="btn btn-success btn-sm" style="margin-left:8px" onclick="verifyDoc('${m.id}')">Vérifier</button>` : ''}
+      </div>
+    </div>`).join('') || `<p style="color:var(--text3);text-align:center;padding:24px">Aucun médecin</p>`;
+}
+window.verifyDoc = async function(id) {
+  await updateDoc(doc(db, 'users', id), { verified: true });
+  toast('Médecin vérifié', 'success');
+  loadMedecins();
+};
+
+// RDV
+async function loadRdv() {
+  const snap = await getDocs(query(collection(db, 'rdv'), orderBy('date', 'desc')));
+  const colors = { confirmé:'green', 'en-attente':'yellow', annulé:'red', terminé:'blue' };
+  document.getElementById('rdvTable').innerHTML = snap.docs.map(d => {
+    const r = d.data();
+    return `<tr>
+      <td>${fmtDate(r.date)}</td>
+      <td>${r.patientNom}</td>
+      <td>Dr. ${r.medecinNom}</td>
+      <td><span class="badge badge-${colors[r.statut]||'blue'}">${r.statut}</span></td>
+      <td style="font-weight:700">${fmtCFA(r.tarif||5000)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// Paiements
+async function loadPaiements() {
+  const snap = await getDocs(query(collection(db, 'paiements'), orderBy('createdAt', 'desc')));
+  document.getElementById('payTable').innerHTML = snap.docs.map(d => {
+    const p = d.data();
+    return `<tr>
+      <td>${fmtDate(p.createdAt)}</td>
+      <td>${p.patientNom}</td>
+      <td>${p.medecinNom}</td>
+      <td style="font-weight:700;color:var(--accent2)">${fmtCFA(p.montant)}</td>
+      <td><span class="badge badge-blue">${p.methode}</span></td>
+      <td><span class="badge ${p.statut==='succès'?'badge-green':'badge-red'}">${p.statut}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+loadGlobal();
+</script>
+</body>
+</html>

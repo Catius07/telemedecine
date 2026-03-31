@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mon Profil — TéléMéd</title>
+<link rel="stylesheet" href="../css/main.css">
+<style>
+  .profile-header {
+    background: linear-gradient(135deg, var(--bg2), var(--bg3));
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 32px;
+    display: flex;
+    gap: 24px;
+    align-items: center;
+    margin-bottom: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+  .profile-header::before {
+    content: '';
+    position: absolute;
+    right: -40px; top: -40px;
+    width: 200px; height: 200px;
+    background: radial-gradient(circle, rgba(59,158,255,0.08), transparent 70%);
+    pointer-events: none;
+  }
+  .avatar-lg {
+    width: 88px; height: 88px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent3), var(--accent));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 2rem; font-weight: 700; color: #fff;
+    flex-shrink: 0; overflow: hidden;
+    border: 3px solid rgba(59,158,255,0.3);
+    cursor: pointer; position: relative;
+  }
+  .avatar-lg:hover::after {
+    content: '📷';
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.5rem;
+    border-radius: 50%;
+  }
+  .profile-tabs { display:flex; gap:4px; background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:4px; margin-bottom:24px; width:fit-content; }
+  .ptab { padding:8px 20px; border-radius:6px; border:none; background:none; color:var(--text2); cursor:pointer; font-family:var(--font); font-size:.88rem; font-weight:500; transition:all var(--transition); }
+  .ptab.active { background:var(--accent); color:#fff; }
+</style>
+</head>
+<body>
+<div id="app-loader" class="loading-full"><div class="spinner"></div></div>
+
+<div class="app-layout" id="appLayout" style="display:none">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo"><div class="logo-mark">🏥</div><span>TéléMéd</span></div>
+    <nav class="sidebar-nav">
+      <a class="nav-item" href="dashboard.html"><span class="nav-icon">🏠</span>Accueil</a>
+      <a class="nav-item" href="medecins.html"><span class="nav-icon">👨‍⚕️</span>Médecins</a>
+      <a class="nav-item" href="rdv.html"><span class="nav-icon">📅</span>Mes RDV</a>
+      <a class="nav-item" href="chat.html"><span class="nav-icon">💬</span>Messages</a>
+      <a class="nav-item" href="dossier.html"><span class="nav-icon">🗂️</span>Dossier médical</a>
+      <a class="nav-item active" href="profil.html"><span class="nav-icon">⚙️</span>Profil</a>
+      <button class="nav-item" id="logoutBtn"><span class="nav-icon">🚪</span>Déconnexion</button>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-card"><div class="avatar" id="avatarEl">?</div><div class="user-info"><div class="user-name" id="userName">…</div><div class="user-role" id="userRole">…</div></div></div>
+    </div>
+  </aside>
+
+  <div class="main-content">
+    <div class="topbar">
+      <button class="menu-toggle" id="menuToggle">☰</button>
+      <span class="topbar-title">Mon Profil</span>
+    </div>
+    <div class="page-content">
+      <!-- Header -->
+      <div class="profile-header fade-up">
+        <div class="avatar-lg" id="bigAvatar" onclick="document.getElementById('photoInput').click()">?</div>
+        <input type="file" id="photoInput" accept="image/*" style="display:none">
+        <div>
+          <h2 id="profileName" style="font-size:1.4rem;font-weight:800;margin-bottom:4px">…</h2>
+          <div id="profileSpec" style="color:var(--accent2);font-size:.9rem;margin-bottom:8px">…</div>
+          <span class="badge badge-green" id="profileRole">Patient</span>
+          <span class="badge badge-blue" id="verifiedBadge" style="display:none;margin-left:6px">✔ Vérifié</span>
+        </div>
+      </div>
+
+      <div class="profile-tabs">
+        <button class="ptab active" data-tab="info">Informations</button>
+        <button class="ptab" data-tab="medical">Données médicales</button>
+        <button class="ptab" data-tab="securite">Sécurité</button>
+      </div>
+
+      <!-- Tab: Infos -->
+      <div id="tab-info">
+        <div class="card fade-up">
+          <h3 style="font-size:.95rem;font-weight:700;margin-bottom:20px">Informations personnelles</h3>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div class="form-group">
+              <label class="form-label">Nom complet</label>
+              <input type="text" id="fName" class="form-control">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Email</label>
+              <input type="email" id="fEmail" class="form-control" disabled>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Téléphone</label>
+              <input type="tel" id="fPhone" class="form-control" placeholder="6XXXXXXXX">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Date de naissance</label>
+              <input type="date" id="fDob" class="form-control">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Sexe</label>
+              <select id="fSexe" class="form-control">
+                <option value="">—</option>
+                <option value="Homme">Homme</option>
+                <option value="Femme">Femme</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Ville</label>
+              <input type="text" id="fVille" class="form-control" placeholder="Yaoundé">
+            </div>
+          </div>
+
+          <!-- Champs médecin -->
+          <div id="docInfoFields" style="display:none;border-top:1px solid var(--border);padding-top:20px;margin-top:8px">
+            <h4 style="font-size:.88rem;font-weight:700;margin-bottom:16px;color:var(--accent2)">Informations professionnelles</h4>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+              <div class="form-group">
+                <label class="form-label">Spécialité</label>
+                <select id="fSpec" class="form-control">
+                  <option>Médecine générale</option><option>Cardiologie</option>
+                  <option>Pédiatrie</option><option>Dermatologie</option>
+                  <option>Gynécologie</option><option>Neurologie</option>
+                  <option>Psychiatrie</option><option>Autre</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">N° Ordre</label>
+                <input type="text" id="fOrdre" class="form-control">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Tarif (FCFA)</label>
+                <input type="number" id="fTarif" class="form-control">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Bio (courte)</label>
+                <input type="text" id="fBio" class="form-control" placeholder="Spécialiste en…">
+              </div>
+            </div>
+          </div>
+
+          <button class="btn btn-primary" id="saveInfoBtn">💾 Enregistrer</button>
+        </div>
+      </div>
+
+      <!-- Tab: Médical -->
+      <div id="tab-medical" style="display:none">
+        <div class="card fade-up">
+          <h3 style="font-size:.95rem;font-weight:700;margin-bottom:20px">Données de santé</h3>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div class="form-group">
+              <label class="form-label">Groupe sanguin</label>
+              <select id="mBlood" class="form-control">
+                <option value="">Non renseigné</option>
+                <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+                <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Taille (cm)</label>
+              <input type="number" id="mTaille" class="form-control" placeholder="175">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Poids (kg)</label>
+              <input type="number" id="mPoids" class="form-control" placeholder="70">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Fumeur</label>
+              <select id="mFumeur" class="form-control">
+                <option value="">Non renseigné</option>
+                <option value="non">Non</option>
+                <option value="occasionnel">Occasionnel</option>
+                <option value="régulier">Régulier</option>
+              </select>
+            </div>
+            <div class="form-group" style="grid-column:1/-1">
+              <label class="form-label">Allergies connues</label>
+              <textarea id="mAllergies" class="form-control" placeholder="Pénicilline, arachides…"></textarea>
+            </div>
+            <div class="form-group" style="grid-column:1/-1">
+              <label class="form-label">Médicaments en cours</label>
+              <textarea id="mMedicaments" class="form-control" placeholder="Liste des médicaments…"></textarea>
+            </div>
+            <div class="form-group" style="grid-column:1/-1">
+              <label class="form-label">Antécédents médicaux</label>
+              <textarea id="mAntecedents" class="form-control" placeholder="Diabète, hypertension…"></textarea>
+            </div>
+          </div>
+          <button class="btn btn-primary" id="saveMedBtn">💾 Enregistrer</button>
+        </div>
+      </div>
+
+      <!-- Tab: Sécurité -->
+      <div id="tab-securite" style="display:none">
+        <div class="card fade-up">
+          <h3 style="font-size:.95rem;font-weight:700;margin-bottom:20px">Changer le mot de passe</h3>
+          <div class="form-group" style="max-width:400px">
+            <label class="form-label">Nouveau mot de passe</label>
+            <input type="password" id="newPass" class="form-control" placeholder="8 caractères minimum">
+          </div>
+          <div class="form-group" style="max-width:400px">
+            <label class="form-label">Confirmer</label>
+            <input type="password" id="confPass" class="form-control">
+          </div>
+          <button class="btn btn-primary" id="changePassBtn">Changer le mot de passe</button>
+
+          <div style="border-top:1px solid var(--border);padding-top:24px;margin-top:24px">
+            <h4 style="font-size:.88rem;font-weight:700;color:var(--danger);margin-bottom:12px">Zone dangereuse</h4>
+            <button class="btn btn-danger" onclick="if(confirm('Supprimer votre compte définitivement ?')) alert('Contactez un administrateur')">
+              Supprimer mon compte
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script type="module">
+import { requireAuth, logout, updateUserProfile, getInitials } from '../js/auth.js';
+import { auth, storage } from '../js/firebase.js';
+import {
+  updatePassword, EmailAuthProvider, reauthenticateWithCredential
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import {
+  ref, uploadBytes, getDownloadURL
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+import { toast, initMobileMenu } from '../js/utils.js';
+
+const { user, profile } = await requireAuth();
+document.getElementById('app-loader').remove();
+document.getElementById('appLayout').style.display = 'flex';
+initMobileMenu();
+document.getElementById('logoutBtn').addEventListener('click', logout);
+
+const isDoc = profile?.role === 'medecin';
+
+// Afficher infos
+function populate() {
+  const n = profile?.name || user.displayName || '';
+  document.getElementById('profileName').textContent = n;
+  document.getElementById('profileSpec').textContent = isDoc ? (profile?.specialite || '') : profile?.email;
+  document.getElementById('profileRole').textContent = profile?.role || 'patient';
+  document.getElementById('userName').textContent = n;
+  document.getElementById('userRole').textContent = profile?.role || 'patient';
+
+  const av = document.getElementById('avatarEl');
+  const bav = document.getElementById('bigAvatar');
+  if (profile?.photo || user.photoURL) {
+    bav.innerHTML = `<img src="${profile?.photo || user.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+    av.innerHTML  = `<img src="${profile?.photo || user.photoURL}">`;
+  } else {
+    bav.textContent = getInitials(n);
+    av.textContent  = getInitials(n);
+  }
+  if (profile?.verified) document.getElementById('verifiedBadge').style.display = '';
+  if (isDoc) document.getElementById('docInfoFields').style.display = 'block';
+
+  // Remplir champs
+  document.getElementById('fName').value  = profile?.name || n;
+  document.getElementById('fEmail').value = user.email || '';
+  document.getElementById('fPhone').value = profile?.phone || '';
+  document.getElementById('fDob').value   = profile?.dateNaissance || '';
+  document.getElementById('fSexe').value  = profile?.sexe || '';
+  document.getElementById('fVille').value = profile?.ville || '';
+  if (isDoc) {
+    document.getElementById('fSpec').value  = profile?.specialite || '';
+    document.getElementById('fOrdre').value = profile?.ordreNum || '';
+    document.getElementById('fTarif').value = profile?.tarif || '';
+    document.getElementById('fBio').value   = profile?.bio || '';
+  }
+  document.getElementById('mBlood').value      = profile?.groupeSanguin || '';
+  document.getElementById('mTaille').value     = profile?.taille || '';
+  document.getElementById('mPoids').value      = profile?.poids || '';
+  document.getElementById('mFumeur').value     = profile?.fumeur || '';
+  document.getElementById('mAllergies').value  = profile?.allergies || '';
+  document.getElementById('mMedicaments').value= profile?.medicaments || '';
+  document.getElementById('mAntecedents').value= profile?.antecedents || '';
+}
+populate();
+
+// Tabs
+document.querySelectorAll('.ptab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.ptab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    ['info','medical','securite'].forEach(t => {
+      document.getElementById(`tab-${t}`).style.display = t === tab.dataset.tab ? 'block' : 'none';
+    });
+  });
+});
+
+// Photo upload
+document.getElementById('photoInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  toast('Upload photo…', 'info');
+  try {
+    const r = ref(storage, `avatars/${user.uid}`);
+    await uploadBytes(r, file);
+    const url = await getDownloadURL(r);
+    await updateUserProfile(user.uid, { photo: url });
+    document.getElementById('bigAvatar').innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+    toast('Photo mise à jour', 'success');
+  } catch (e) { toast(e.message, 'error'); }
+});
+
+// Save info
+document.getElementById('saveInfoBtn').addEventListener('click', async () => {
+  const data = {
+    name:          document.getElementById('fName').value,
+    phone:         document.getElementById('fPhone').value,
+    dateNaissance: document.getElementById('fDob').value,
+    sexe:          document.getElementById('fSexe').value,
+    ville:         document.getElementById('fVille').value,
+  };
+  if (isDoc) {
+    data.specialite = document.getElementById('fSpec').value;
+    data.ordreNum   = document.getElementById('fOrdre').value;
+    data.tarif      = Number(document.getElementById('fTarif').value);
+    data.bio        = document.getElementById('fBio').value;
+  }
+  try {
+    await updateUserProfile(user.uid, data);
+    document.getElementById('profileName').textContent = data.name;
+    toast('Profil mis à jour !', 'success');
+  } catch (e) { toast(e.message, 'error'); }
+});
+
+// Save medical
+document.getElementById('saveMedBtn').addEventListener('click', async () => {
+  const data = {
+    groupeSanguin: document.getElementById('mBlood').value,
+    taille:        document.getElementById('mTaille').value,
+    poids:         document.getElementById('mPoids').value,
+    fumeur:        document.getElementById('mFumeur').value,
+    allergies:     document.getElementById('mAllergies').value,
+    medicaments:   document.getElementById('mMedicaments').value,
+    antecedents:   document.getElementById('mAntecedents').value,
+  };
+  try {
+    await updateUserProfile(user.uid, data);
+    toast('Données médicales enregistrées !', 'success');
+  } catch (e) { toast(e.message, 'error'); }
+});
+
+// Change password
+document.getElementById('changePassBtn').addEventListener('click', async () => {
+  const np = document.getElementById('newPass').value;
+  const cp = document.getElementById('confPass').value;
+  if (np !== cp)    { toast('Les mots de passe ne correspondent pas', 'error'); return; }
+  if (np.length < 8){ toast('Minimum 8 caractères', 'warn'); return; }
+  try {
+    await updatePassword(auth.currentUser, np);
+    toast('Mot de passe changé !', 'success');
+    document.getElementById('newPass').value = '';
+    document.getElementById('confPass').value = '';
+  } catch (e) {
+    toast('Reconnectez-vous avant de changer le mot de passe', 'error');
+  }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rendez-vous — TéléMéd</title>
+<link rel="stylesheet" href="../css/main.css">
+<style>
+  .tab-bar { display:flex; gap:4px; background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:4px; margin-bottom:24px; width:fit-content; }
+  .tab { padding:8px 20px; border-radius:6px; border:none; background:none; color:var(--text2); cursor:pointer; font-family:var(--font); font-size:.88rem; font-weight:500; transition:all var(--transition); }
+  .tab.active { background:var(--accent); color:#fff; }
+</style>
+</head>
+<body>
+<div id="app-loader" class="loading-full"><div class="spinner"></div></div>
+
+<div class="app-layout" id="appLayout" style="display:none">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo"><div class="logo-mark">🏥</div><span>TéléMéd</span></div>
+    <nav class="sidebar-nav">
+      <a class="nav-item" href="dashboard.html"><span class="nav-icon">🏠</span>Accueil</a>
+      <a class="nav-item" href="medecins.html"><span class="nav-icon">👨‍⚕️</span>Médecins</a>
+      <a class="nav-item active" href="rdv.html"><span class="nav-icon">📅</span>Mes RDV</a>
+      <a class="nav-item" href="chat.html"><span class="nav-icon">💬</span>Messages</a>
+      <a class="nav-item" href="dossier.html"><span class="nav-icon">🗂️</span>Dossier médical</a>
+      <a class="nav-item" href="paiements.html"><span class="nav-icon">💳</span>Paiements</a>
+      <button class="nav-item" id="logoutBtn"><span class="nav-icon">🚪</span>Déconnexion</button>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-card"><div class="avatar" id="avatarEl">?</div><div class="user-info"><div class="user-name" id="userName">…</div></div></div>
+    </div>
+  </aside>
+
+  <div class="main-content">
+    <div class="topbar">
+      <button class="menu-toggle" id="menuToggle">☰</button>
+      <span class="topbar-title">Mes Rendez-vous</span>
+      <button class="btn btn-primary btn-sm" onclick="location.href='medecins.html'">+ Nouveau RDV</button>
+    </div>
+    <div class="page-content">
+      <div class="tab-bar">
+        <button class="tab active" data-tab="avenir">À venir</button>
+        <button class="tab" data-tab="passe">Passés</button>
+        <button class="tab" data-tab="attente">En attente</button>
+      </div>
+
+      <div id="rdvContainer">
+        <div class="spinner" style="margin:40px auto"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script type="module">
+import { requireAuth, logout, getInitials } from '../js/auth.js';
+import { db } from '../js/firebase.js';
+import {
+  collection, query, where, orderBy, getDocs, doc, updateDoc
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { toast, fmtDate, fmtTime, fmtCFA, initMobileMenu } from '../js/utils.js';
+
+const { user, profile } = await requireAuth();
+document.getElementById('app-loader').remove();
+document.getElementById('appLayout').style.display = 'flex';
+document.getElementById('userName').textContent = profile?.name || user.displayName;
+document.getElementById('avatarEl').textContent = getInitials(profile?.name || user.displayName);
+document.getElementById('logoutBtn').addEventListener('click', logout);
+initMobileMenu();
+
+const isDoc = profile?.role === 'medecin';
+let currentTab = 'avenir';
+let allRdv = [];
+
+async function loadRdv() {
+  const field = isDoc ? 'medecinId' : 'patientId';
+  const q = query(collection(db, 'rdv'), where(field, '==', user.uid), orderBy('date'));
+  const snap = await getDocs(q);
+  allRdv = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  render();
+}
+
+function render() {
+  const now = new Date();
+  const filtered = allRdv.filter(r => {
+    const d = r.date?.toDate ? r.date.toDate() : new Date(r.date);
+    if (currentTab === 'avenir')  return d >= now && r.statut === 'confirmé';
+    if (currentTab === 'passe')   return d < now || r.statut === 'terminé';
+    if (currentTab === 'attente') return r.statut === 'en-attente';
+    return true;
+  });
+
+  const el = document.getElementById('rdvContainer');
+  if (!filtered.length) {
+    el.innerHTML = `<div style="text-align:center;padding:60px;color:var(--text3)"><div style="font-size:3rem;margin-bottom:12px">📭</div><p>Aucun rendez-vous dans cette catégorie</p></div>`;
+    return;
+  }
+
+  el.innerHTML = filtered.map(r => {
+    const d = r.date?.toDate ? r.date.toDate() : new Date(r.date);
+    const isUpcoming = d >= now && r.statut !== 'annulé';
+    const colors = { confirmé:'green', 'en-attente':'yellow', annulé:'red', terminé:'blue' };
+    const otherName = isDoc ? r.patientNom : `Dr. ${r.medecinNom}`;
+    const roomId = [r.patientId, r.medecinId].sort().join('_');
+    return `
+    <div class="card" style="display:flex;gap:20px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+      <div style="background:var(--bg3);border-radius:12px;padding:16px 20px;text-align:center;min-width:70px;flex-shrink:0">
+        <div style="font-size:1.5rem;font-weight:800;color:var(--accent);line-height:1">${d.getDate()}</div>
+        <div style="font-size:.75rem;color:var(--text3);text-transform:uppercase">${d.toLocaleString('fr-FR',{month:'short'})}</div>
+        <div style="font-size:.8rem;color:var(--text2);margin-top:2px">${fmtTime(r.date)}</div>
+      </div>
+      <div style="flex:1;min-width:180px">
+        <div style="font-weight:700;font-size:1rem;margin-bottom:4px">${otherName}</div>
+        <div style="font-size:.82rem;color:var(--accent2);margin-bottom:6px">${r.specialite || 'Consultation'}</div>
+        <div style="font-size:.82rem;color:var(--text2)">${r.motif || ''}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end">
+        <span class="badge badge-${colors[r.statut] || 'blue'}">${r.statut}</span>
+        <div style="font-weight:700;color:var(--text)">${fmtCFA(r.tarif || 5000)}</div>
+        <div style="display:flex;gap:8px">
+          ${isUpcoming ? `
+            <button class="btn btn-primary btn-sm" onclick="location.href='video.html?room=${roomId}'">📹 Rejoindre</button>
+            <button class="btn btn-ghost btn-sm" onclick="location.href='chat.html?with=${isDoc?r.patientId:r.medecinId}&name=${encodeURIComponent(otherName)}'">💬</button>
+          ` : ''}
+          ${r.statut === 'en-attente' && isDoc ? `
+            <button class="btn btn-success btn-sm" onclick="updateRdv('${r.id}','confirmé')">✔ Confirmer</button>
+            <button class="btn btn-danger btn-sm" onclick="updateRdv('${r.id}','annulé')">✘ Refuser</button>
+          ` : ''}
+          ${r.statut !== 'annulé' && r.statut !== 'terminé' && !isDoc ? `
+            <button class="btn btn-ghost btn-sm" onclick="updateRdv('${r.id}','annulé')" style="color:var(--danger);border-color:var(--danger)">Annuler</button>
+          ` : ''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+window.updateRdv = async function(id, statut) {
+  try {
+    await updateDoc(doc(db, 'rdv', id), { statut });
+    toast(`RDV ${statut}`, 'success');
+    const r = allRdv.find(x => x.id === id);
+    if (r) r.statut = statut;
+    render();
+  } catch (e) { toast(e.message, 'error'); }
+};
+
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    currentTab = t.dataset.tab;
+    render();
+  });
+});
+
+loadRdv();
+</script>
+</body>
+</html>

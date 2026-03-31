@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dossier médical — TéléMéd</title>
+<link rel="stylesheet" href="../css/main.css">
+</head>
+<body>
+<div id="app-loader" class="loading-full"><div class="spinner"></div></div>
+
+<div class="app-layout" id="appLayout" style="display:none">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo"><div class="logo-mark">🏥</div><span>TéléMéd</span></div>
+    <nav class="sidebar-nav">
+      <a class="nav-item" href="dashboard.html"><span class="nav-icon">🏠</span>Accueil</a>
+      <a class="nav-item" href="medecins.html"><span class="nav-icon">👨‍⚕️</span>Médecins</a>
+      <a class="nav-item" href="rdv.html"><span class="nav-icon">📅</span>Mes RDV</a>
+      <a class="nav-item" href="chat.html"><span class="nav-icon">💬</span>Messages</a>
+      <a class="nav-item active" href="dossier.html"><span class="nav-icon">🗂️</span>Dossier médical</a>
+      <a class="nav-item" href="paiements.html"><span class="nav-icon">💳</span>Paiements</a>
+      <button class="nav-item" id="logoutBtn"><span class="nav-icon">🚪</span>Déconnexion</button>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-card"><div class="avatar" id="avatarEl">?</div><div class="user-info"><div class="user-name" id="userName">…</div></div></div>
+    </div>
+  </aside>
+
+  <div class="main-content">
+    <div class="topbar">
+      <button class="menu-toggle" id="menuToggle">☰</button>
+      <span class="topbar-title">Dossier médical</span>
+    </div>
+    <div class="page-content">
+      <div style="display:grid;grid-template-columns:300px 1fr;gap:20px" id="dossierGrid">
+        <!-- Info patient -->
+        <div>
+          <div class="card fade-up" style="margin-bottom:16px">
+            <div style="text-align:center;padding:12px 0">
+              <div class="avatar" style="width:64px;height:64px;font-size:1.5rem;margin:auto" id="bigAvatar">?</div>
+              <div style="font-weight:700;margin-top:12px;font-size:1.05rem" id="patientNameBig">…</div>
+              <div style="font-size:.82rem;color:var(--text3)" id="patientEmail">…</div>
+            </div>
+            <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:8px">
+              <div id="infosGrid" style="display:flex;flex-direction:column;gap:10px">
+                <div class="spinner" style="margin:auto"></div>
+              </div>
+            </div>
+          </div>
+          <!-- Upload doc -->
+          <div class="card fade-up delay-1">
+            <h3 style="font-size:.9rem;font-weight:700;margin-bottom:12px">📎 Documents</h3>
+            <label style="display:block;border:2px dashed var(--border);border-radius:var(--radius-sm);padding:20px;text-align:center;cursor:pointer;transition:border-color var(--transition)" id="dropZone">
+              <input type="file" id="fileInput" style="display:none" accept=".pdf,.jpg,.png">
+              <div style="font-size:1.5rem;margin-bottom:6px">📤</div>
+              <div style="font-size:.82rem;color:var(--text2)">Glisser un fichier ou cliquer</div>
+              <div style="font-size:.72rem;color:var(--text3);margin-top:4px">PDF, JPG, PNG (max 5 Mo)</div>
+            </label>
+            <div id="docsList" style="margin-top:12px"></div>
+          </div>
+        </div>
+
+        <!-- Notes & historique -->
+        <div>
+          <div class="card fade-up delay-1" style="margin-bottom:16px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+              <h2 style="font-size:1rem;font-weight:700">📋 Historique consultations</h2>
+            </div>
+            <div id="histoList">
+              <div class="spinner" style="margin:24px auto"></div>
+            </div>
+          </div>
+
+          <!-- Notes médecin (visible medecin seulement en mode write) -->
+          <div class="card fade-up delay-2" id="noteSection" style="display:none">
+            <h2 style="font-size:1rem;font-weight:700;margin-bottom:16px">✏️ Ajouter une note médicale</h2>
+            <div class="form-group">
+              <select id="rdvSelect" class="form-control">
+                <option value="">Sélectionner une consultation…</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Diagnostic</label>
+              <textarea id="noteDiag" class="form-control" placeholder="Diagnostic…"></textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Ordonnance / Traitement</label>
+              <textarea id="noteTraitement" class="form-control" placeholder="Traitement prescrit…"></textarea>
+            </div>
+            <button class="btn btn-primary" id="saveNoteBtn">💾 Enregistrer</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script type="module">
+import { requireAuth, logout, getInitials } from '../js/auth.js';
+import { db, storage } from '../js/firebase.js';
+import {
+  collection, query, where, getDocs, addDoc, doc, updateDoc, serverTimestamp, orderBy
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import {
+  ref, uploadBytes, getDownloadURL
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+import { toast, fmtDate, fmtDateTime, initMobileMenu, getInitials as gi } from '../js/utils.js';
+
+const { user, profile } = await requireAuth();
+document.getElementById('app-loader').remove();
+document.getElementById('appLayout').style.display = 'flex';
+
+const isDoc = profile?.role === 'medecin';
+// Get patientId from URL param (for doctor viewing patient) or own uid
+const params = new URLSearchParams(location.search);
+const patientId = params.get('patient') || (isDoc ? null : user.uid);
+
+document.getElementById('userName').textContent = profile?.name || user.displayName;
+document.getElementById('avatarEl').textContent = getInitials(profile?.name || user.displayName);
+document.getElementById('logoutBtn').addEventListener('click', logout);
+initMobileMenu();
+
+// Show add-note section for doctors
+if (isDoc) document.getElementById('noteSection').style.display = 'block';
+
+async function loadDossier() {
+  const uid = patientId || user.uid;
+  const { getUserProfile } = await import('../js/auth.js');
+  const pat = await getUserProfile(uid);
+
+  document.getElementById('patientNameBig').textContent = pat?.name || '—';
+  document.getElementById('patientEmail').textContent = pat?.email || '—';
+  document.getElementById('bigAvatar').textContent = getInitials(pat?.name || '');
+
+  // Infos
+  document.getElementById('infosGrid').innerHTML = [
+    ['🩸', 'Groupe sanguin', pat?.groupeSanguin || 'Non renseigné'],
+    ['📅', 'Date naissance', pat?.dateNaissance || 'Non renseigné'],
+    ['🚻', 'Sexe', pat?.sexe || 'Non renseigné'],
+    ['⚠️', 'Allergies', pat?.allergies || 'Aucune'],
+    ['💊', 'Médicaments', pat?.medicaments || 'Aucun'],
+  ].map(([icon, label, val]) => `
+    <div style="display:flex;gap:10px;font-size:.85rem">
+      <span>${icon}</span>
+      <div>
+        <div style="color:var(--text3);font-size:.72rem;margin-bottom:1px">${label}</div>
+        <div style="font-weight:500">${val}</div>
+      </div>
+    </div>
+  `).join('');
+
+  // Historique consultations
+  const q = query(
+    collection(db, 'rdv'),
+    where('patientId', '==', uid),
+    orderBy('date', 'desc')
+  );
+  const snap = await getDocs(q);
+  const rdvDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  if (isDoc) {
+    const sel = document.getElementById('rdvSelect');
+    rdvDocs.filter(r => r.medecinId === user.uid).forEach(r => {
+      sel.innerHTML += `<option value="${r.id}">${fmtDate(r.date)} — ${r.patientNom}</option>`;
+    });
+  }
+
+  const histo = document.getElementById('histoList');
+  if (!rdvDocs.length) {
+    histo.innerHTML = `<p style="color:var(--text3);text-align:center;padding:24px">Aucune consultation</p>`;
+    return;
+  }
+  histo.innerHTML = rdvDocs.map(r => `
+    <div style="border-left:3px solid var(--accent);padding:14px 16px;margin-bottom:12px;background:var(--bg3);border-radius:0 8px 8px 0">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div style="font-weight:700">${fmtDate(r.date)} à ${r.date?.toDate ? r.date.toDate().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) : ''}</div>
+        <span class="badge ${r.statut==='terminé'?'badge-blue':r.statut==='confirmé'?'badge-green':'badge-yellow'}">${r.statut}</span>
+      </div>
+      <div style="font-size:.85rem;color:var(--text2)">Dr. ${r.medecinNom} · ${r.specialite}</div>
+      ${r.motif ? `<div style="font-size:.82rem;color:var(--text3);margin-top:6px">Motif: ${r.motif}</div>` : ''}
+      ${r.diagnostic ? `<div style="margin-top:8px;padding:8px;background:rgba(59,158,255,0.08);border-radius:6px;font-size:.82rem"><b>Diagnostic:</b> ${r.diagnostic}<br><b>Traitement:</b> ${r.traitement || '—'}</div>` : ''}
+    </div>
+  `).join('');
+
+  // Docs
+  loadStorageFiles(uid);
+}
+
+async function loadStorageFiles(uid) {
+  const q = query(collection(db, 'documents'), where('patientId', '==', uid));
+  const snap = await getDocs(q);
+  const el = document.getElementById('docsList');
+  if (snap.empty) { el.innerHTML = ''; return; }
+  el.innerHTML = snap.docs.map(d => {
+    const doc = d.data();
+    return `<div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--bg3);border-radius:6px;margin-bottom:6px;font-size:.82rem">
+      <span>📄</span>
+      <a href="${doc.url}" target="_blank" style="color:var(--accent);text-decoration:none;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${doc.name}</a>
+      <span style="color:var(--text3)">${fmtDate(doc.createdAt)}</span>
+    </div>`;
+  }).join('');
+}
+
+// Upload fichier
+document.getElementById('fileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { toast('Fichier trop volumineux (max 5 Mo)', 'error'); return; }
+  const uid = patientId || user.uid;
+  toast('Envoi en cours…', 'info');
+  try {
+    const storageRef = ref(storage, `documents/${uid}/${Date.now()}_${file.name}`);
+    await uploadBytes(storageRef, file);
+    const url = await getDownloadURL(storageRef);
+    await addDoc(collection(db, 'documents'), {
+      patientId: uid,
+      name: file.name,
+      url,
+      uploadedBy: user.uid,
+      createdAt: serverTimestamp()
+    });
+    toast('Fichier uploadé !', 'success');
+    loadStorageFiles(uid);
+  } catch (err) { toast(err.message, 'error'); }
+});
+
+// Save note
+document.getElementById('saveNoteBtn')?.addEventListener('click', async () => {
+  const rdvId = document.getElementById('rdvSelect').value;
+  if (!rdvId) { toast('Sélectionnez une consultation', 'warn'); return; }
+  const diag = document.getElementById('noteDiag').value;
+  const traitement = document.getElementById('noteTraitement').value;
+  try {
+    await updateDoc(doc(db, 'rdv', rdvId), {
+      diagnostic: diag,
+      traitement,
+      statut: 'terminé',
+      updatedAt: serverTimestamp()
+    });
+    toast('Note enregistrée !', 'success');
+    loadDossier();
+  } catch (e) { toast(e.message, 'error'); }
+});
+
+function getInitials(name = '') {
+  return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?';
+}
+
+loadDossier();
+</script>
+</body>
+</html>

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Espace Médecin — TéléMéd</title>
+<link rel="stylesheet" href="../css/main.css">
+</head>
+<body>
+<div id="app-loader" class="loading-full"><div class="spinner"></div></div>
+
+<div class="app-layout" id="appLayout" style="display:none">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo"><div class="logo-mark">🏥</div><span>TéléMéd<small>Médecin</small></span></div>
+    <nav class="sidebar-nav">
+      <a class="nav-item active" href="medecin-dashboard.html"><span class="nav-icon">🏠</span>Tableau de bord</a>
+      <a class="nav-item" href="rdv.html"><span class="nav-icon">📅</span>Mes consultations</a>
+      <a class="nav-item" href="chat.html"><span class="nav-icon">💬</span>Messages</a>
+      <a class="nav-item" href="profil.html"><span class="nav-icon">⚙️</span>Mon profil</a>
+      <button class="nav-item" id="logoutBtn"><span class="nav-icon">🚪</span>Déconnexion</button>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-card"><div class="avatar" id="avatarEl">?</div><div class="user-info"><div class="user-name" id="userName">…</div><div class="user-role" id="userSpec">Médecin</div></div></div>
+    </div>
+  </aside>
+
+  <div class="main-content">
+    <div class="topbar">
+      <button class="menu-toggle" id="menuToggle">☰</button>
+      <span class="topbar-title">Espace Médecin</span>
+      <span class="badge badge-green" id="availBadge">● Disponible</span>
+    </div>
+    <div class="page-content">
+      <!-- Stats -->
+      <div class="stat-grid fade-up">
+        <div class="stat-card">
+          <div class="stat-icon">📅</div>
+          <div class="stat-label">RDV en attente</div>
+          <div class="stat-value" id="statPending">—</div>
+          <div class="stat-sub">à confirmer</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">✅</div>
+          <div class="stat-label">Aujourd'hui</div>
+          <div class="stat-value" id="statToday">—</div>
+          <div class="stat-sub">consultations</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">👥</div>
+          <div class="stat-label">Patients</div>
+          <div class="stat-value" id="statPatients">—</div>
+          <div class="stat-sub">au total</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">💰</div>
+          <div class="stat-label">Revenus (mois)</div>
+          <div class="stat-value" id="statRevenu">—</div>
+          <div class="stat-sub">FCFA</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+        <!-- RDV en attente -->
+        <div class="card fade-up delay-1">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+            <h2 style="font-size:1rem;font-weight:700">⏳ En attente de confirmation</h2>
+            <a href="rdv.html?tab=attente" style="color:var(--accent);font-size:.82rem;text-decoration:none">Tout voir →</a>
+          </div>
+          <div id="pendingList"><div class="spinner" style="margin:24px auto"></div></div>
+        </div>
+
+        <!-- Consultations du jour -->
+        <div class="card fade-up delay-2">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+            <h2 style="font-size:1rem;font-weight:700">📅 Planning du jour</h2>
+          </div>
+          <div id="todayList"><div class="spinner" style="margin:24px auto"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script type="module">
+import { requireAuth, logout, getInitials } from '../js/auth.js';
+import { db } from '../js/firebase.js';
+import {
+  collection, query, where, getDocs, doc, updateDoc, orderBy, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { toast, fmtDate, fmtTime, fmtCFA, initMobileMenu } from '../js/utils.js';
+
+const { user, profile } = await requireAuth();
+if (profile?.role !== 'medecin') {
+  window.location.href = 'dashboard.html';
+}
+document.getElementById('app-loader').remove();
+document.getElementById('appLayout').style.display = 'flex';
+document.getElementById('userName').textContent = `Dr. ${profile?.name || user.displayName}`;
+document.getElementById('avatarEl').textContent = getInitials(profile?.name || user.displayName);
+document.getElementById('userSpec').textContent = profile?.specialite || 'Médecin';
+document.getElementById('logoutBtn').addEventListener('click', logout);
+initMobileMenu();
+
+async function loadDashboard() {
+  const q = query(collection(db, 'rdv'), where('medecinId', '==', user.uid), orderBy('date'));
+  const snap = await getDocs(q);
+  const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  const now = new Date();
+  const today = now.toDateString();
+  const pending = all.filter(r => r.statut === 'en-attente');
+  const todayRdv = all.filter(r => {
+    const d = r.date?.toDate ? r.date.toDate() : new Date(r.date);
+    return d.toDateString() === today;
+  });
+
+  // Stats
+  document.getElementById('statPending').textContent = pending.length;
+  document.getElementById('statToday').textContent = todayRdv.length;
+  const patients = new Set(all.map(r => r.patientId));
+  document.getElementById('statPatients').textContent = patients.size;
+
+  // Revenus du mois
+  const payQ = query(
+    collection(db, 'paiements'),
+    where('medecinNom', '==', profile?.name)
+  );
+  const paySnap = await getDocs(payQ);
+  let rev = 0;
+  paySnap.forEach(d => rev += d.data().montant || 0);
+  document.getElementById('statRevenu').textContent = fmtCFA(rev);
+
+  // Pending
+  const pendEl = document.getElementById('pendingList');
+  if (!pending.length) {
+    pendEl.innerHTML = `<p style="color:var(--text3);text-align:center;padding:20px">Aucune demande</p>`;
+  } else {
+    pendEl.innerHTML = pending.slice(0,4).map(r => `
+      <div style="display:flex;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--border)">
+        <div class="avatar" style="width:36px;height:36px;background:linear-gradient(135deg,var(--accent3),var(--accent))">${r.patientNom?.[0] || 'P'}</div>
+        <div style="flex:1">
+          <div style="font-weight:600;font-size:.9rem">${r.patientNom}</div>
+          <div style="font-size:.78rem;color:var(--text2)">${fmtDate(r.date)} · ${fmtTime(r.date)}</div>
+          <div style="font-size:.78rem;color:var(--text3)">${r.motif || ''}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <button class="btn btn-success btn-sm" onclick="acceptRdv('${r.id}')">✔</button>
+          <button class="btn btn-danger btn-sm" onclick="rejectRdv('${r.id}')">✘</button>
+        </div>
+      </div>`).join('');
+  }
+
+  // Today
+  const todayEl = document.getElementById('todayList');
+  if (!todayRdv.length) {
+    todayEl.innerHTML = `<p style="color:var(--text3);text-align:center;padding:20px">Aucune consultation aujourd'hui</p>`;
+  } else {
+    todayEl.innerHTML = todayRdv.map(r => {
+      const roomId = [r.patientId, r.medecinId].sort().join('_');
+      return `
+      <div style="display:flex;gap:12px;align-items:center;padding:12px;background:var(--bg3);border-radius:8px;margin-bottom:8px">
+        <div style="font-family:var(--mono);font-size:.85rem;color:var(--accent);min-width:50px">${fmtTime(r.date)}</div>
+        <div style="flex:1">
+          <div style="font-weight:600;font-size:.9rem">${r.patientNom}</div>
+          <div style="font-size:.78rem;color:var(--text2)">${r.motif || 'Consultation'}</div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-primary btn-sm" onclick="location.href='video.html?room=${roomId}'">📹</button>
+          <button class="btn btn-ghost btn-sm" onclick="location.href='chat.html?with=${r.patientId}&name=${encodeURIComponent(r.patientNom)}'">💬</button>
+          <button class="btn btn-ghost btn-sm" onclick="location.href='dossier.html?patient=${r.patientId}'">🗂️</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+}
+
+window.acceptRdv = async function(id) {
+  await updateDoc(doc(db, 'rdv', id), { statut: 'confirmé', updatedAt: serverTimestamp() });
+  toast('RDV confirmé', 'success');
+  loadDashboard();
+};
+window.rejectRdv = async function(id) {
+  await updateDoc(doc(db, 'rdv', id), { statut: 'annulé', updatedAt: serverTimestamp() });
+  toast('RDV refusé', 'warn');
+  loadDashboard();
+};
+
+loadDashboard();
+</script>
+</body>
+</html>

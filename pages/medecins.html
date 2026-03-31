@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Médecins — TéléMéd</title>
+<link rel="stylesheet" href="../css/main.css">
+<style>
+  .filter-bar { display:flex; gap:12px; margin-bottom:24px; flex-wrap:wrap; align-items:center; }
+  .search-box { flex:1; min-width:220px; position:relative; }
+  .search-box input { padding-left:40px; }
+  .search-box::before { content:'🔍'; position:absolute; left:14px; top:50%; transform:translateY(-50%); font-size:.9rem; }
+  .doctors-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:16px; }
+</style>
+</head>
+<body>
+<div id="app-loader" class="loading-full"><div class="spinner"></div></div>
+
+<div class="app-layout" id="appLayout" style="display:none">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo"><div class="logo-mark">🏥</div><span>TéléMéd<small>Patient</small></span></div>
+    <nav class="sidebar-nav">
+      <a class="nav-item" href="dashboard.html"><span class="nav-icon">🏠</span>Accueil</a>
+      <a class="nav-item active" href="medecins.html"><span class="nav-icon">👨‍⚕️</span>Médecins</a>
+      <a class="nav-item" href="rdv.html"><span class="nav-icon">📅</span>Mes RDV</a>
+      <a class="nav-item" href="chat.html"><span class="nav-icon">💬</span>Messages</a>
+      <a class="nav-item" href="dossier.html"><span class="nav-icon">🗂️</span>Dossier médical</a>
+      <a class="nav-item" href="paiements.html"><span class="nav-icon">💳</span>Paiements</a>
+      <button class="nav-item" id="logoutBtn"><span class="nav-icon">🚪</span>Déconnexion</button>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-card"><div class="avatar" id="avatarEl">?</div><div class="user-info"><div class="user-name" id="userName">…</div><div class="user-role">Patient</div></div></div>
+    </div>
+  </aside>
+
+  <div class="main-content">
+    <div class="topbar">
+      <button class="menu-toggle" id="menuToggle">☰</button>
+      <span class="topbar-title">Trouver un médecin</span>
+    </div>
+    <div class="page-content">
+      <div class="filter-bar">
+        <div class="search-box">
+          <input type="text" class="form-control" id="searchInput" placeholder="Nom, spécialité…">
+        </div>
+        <select class="form-control" id="specFilter" style="width:200px">
+          <option value="">Toutes spécialités</option>
+          <option>Médecine générale</option>
+          <option>Cardiologie</option>
+          <option>Pédiatrie</option>
+          <option>Dermatologie</option>
+          <option>Gynécologie</option>
+          <option>Neurologie</option>
+          <option>Psychiatrie</option>
+        </select>
+      </div>
+
+      <div class="doctors-grid" id="doctorsGrid">
+        <div style="grid-column:1/-1;text-align:center;padding:40px"><div class="spinner" style="margin:auto"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal RDV -->
+<div class="modal-overlay" id="rdvModal">
+  <div class="modal">
+    <h3 class="modal-title">Prendre un rendez-vous</h3>
+    <p id="modalDocName" style="color:var(--text2);margin-bottom:20px;font-size:.9rem"></p>
+    <div class="form-group">
+      <label class="form-label">Date</label>
+      <input type="date" id="rdvDate" class="form-control">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Heure</label>
+      <select id="rdvHeure" class="form-control">
+        <option value="08:00">08h00</option><option value="09:00">09h00</option>
+        <option value="10:00">10h00</option><option value="11:00">11h00</option>
+        <option value="14:00">14h00</option><option value="15:00">15h00</option>
+        <option value="16:00">16h00</option><option value="17:00">17h00</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Motif</label>
+      <textarea id="rdvMotif" class="form-control" placeholder="Décrivez brièvement votre motif de consultation…"></textarea>
+    </div>
+    <div style="display:flex;gap:12px">
+      <button class="btn btn-ghost" onclick="document.getElementById('rdvModal').classList.remove('open')">Annuler</button>
+      <button class="btn btn-primary" id="confirmRdvBtn">Confirmer</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script type="module">
+import { requireAuth, logout, getInitials } from '../js/auth.js';
+import { db } from '../js/firebase.js';
+import {
+  collection, query, where, getDocs, addDoc, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { toast, fmtCFA, initMobileMenu } from '../js/utils.js';
+
+const { user, profile } = await requireAuth();
+document.getElementById('app-loader').remove();
+document.getElementById('appLayout').style.display = 'flex';
+
+document.getElementById('userName').textContent = profile?.name || user.displayName;
+const av = document.getElementById('avatarEl');
+av.textContent = getInitials(profile?.name || user.displayName);
+document.getElementById('logoutBtn').addEventListener('click', logout);
+initMobileMenu();
+
+// Min date = aujourd'hui
+document.getElementById('rdvDate').min = new Date().toISOString().split('T')[0];
+
+// Charger médecins
+let allDocs = [];
+let selectedDocId = null, selectedDoc = null;
+
+async function loadDoctors() {
+  const q = query(collection(db, 'users'), where('role', '==', 'medecin'));
+  const snap = await getDocs(q);
+  allDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  // Pré-sélection par URL
+  const params = new URLSearchParams(location.search);
+  if (params.get('medecin')) openRdvModal(params.get('medecin'));
+  render(allDocs);
+}
+
+function render(docs) {
+  const grid = document.getElementById('doctorsGrid');
+  if (!docs.length) {
+    grid.innerHTML = `<p style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text3)">Aucun médecin trouvé</p>`;
+    return;
+  }
+  grid.innerHTML = docs.map(d => `
+    <div class="doctor-card">
+      <div class="doctor-avatar" style="width:64px;height:64px;font-size:1.6rem">${d.photo ? `<img src="${d.photo}">` : '👨‍⚕️'}</div>
+      <div class="doctor-info">
+        <div class="doctor-name">Dr. ${d.name}</div>
+        <div class="doctor-spec">${d.specialite || 'Généraliste'}</div>
+        <div class="doctor-meta"><span class="doctor-rating">★ ${d.rating || '4.5'}</span> · ${d.consultations || 0} consultations</div>
+        <div style="margin-top:8px">
+          <span class="badge badge-green"><span class="online-dot"></span>Disponible</span>
+          <span style="float:right;font-weight:700;color:var(--text)">${fmtCFA(d.tarif || 5000)}</span>
+        </div>
+        <button class="btn btn-primary btn-sm" style="margin-top:12px;width:100%" onclick="window.openRdv('${d.id}')">
+          📅 Prendre RDV
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+window.openRdv = function(id) {
+  selectedDoc = allDocs.find(d => d.id === id);
+  selectedDocId = id;
+  document.getElementById('modalDocName').textContent = `Dr. ${selectedDoc?.name} — ${selectedDoc?.specialite}`;
+  document.getElementById('rdvModal').classList.add('open');
+};
+
+function openRdvModal(id) { window.openRdv(id); }
+
+// Filtres
+document.getElementById('searchInput').addEventListener('input', filter);
+document.getElementById('specFilter').addEventListener('change', filter);
+function filter() {
+  const s = document.getElementById('searchInput').value.toLowerCase();
+  const sp = document.getElementById('specFilter').value;
+  render(allDocs.filter(d =>
+    (!s || d.name?.toLowerCase().includes(s) || d.specialite?.toLowerCase().includes(s)) &&
+    (!sp || d.specialite === sp)
+  ));
+}
+
+// Confirmer RDV
+document.getElementById('confirmRdvBtn').addEventListener('click', async () => {
+  const dateVal = document.getElementById('rdvDate').value;
+  const heure   = document.getElementById('rdvHeure').value;
+  const motif   = document.getElementById('rdvMotif').value;
+  if (!dateVal) { toast('Choisissez une date', 'warn'); return; }
+
+  const btn = document.getElementById('confirmRdvBtn');
+  btn.disabled = true;
+  btn.textContent = 'Enregistrement…';
+
+  const dateTime = new Date(`${dateVal}T${heure}:00`);
+  try {
+    await addDoc(collection(db, 'rdv'), {
+      patientId:   user.uid,
+      patientNom:  profile?.name || user.displayName,
+      medecinId:   selectedDocId,
+      medecinNom:  selectedDoc?.name,
+      specialite:  selectedDoc?.specialite || '',
+      tarif:       selectedDoc?.tarif || 5000,
+      date:        dateTime,
+      motif,
+      statut:      'en-attente',
+      createdAt:   serverTimestamp()
+    });
+    toast('Rendez-vous enregistré !', 'success');
+    document.getElementById('rdvModal').classList.remove('open');
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Confirmer';
+  }
+});
+
+loadDoctors();
+</script>
+</body>
+</html>
